@@ -1,0 +1,9 @@
+{
+        "compilerOptions": {
+          "checkJs": false, // Disable type checking for JavaScript files
+          "target": "ES6", // Set ECMAScript version
+          "module": "commonjs" // Specify module system
+        },
+        "exclude": ["node_modules"] // Exclude node_modules from analysis
+      }
+      
