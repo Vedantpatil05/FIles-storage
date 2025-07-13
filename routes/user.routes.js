@@ -1,80 +1,103 @@
-const express=require('express');
+const express = require('express');
 const { body, validationResult } = require('express-validator');
-const router =express.Router();
-const userModel=require('../models/user.model');
-const bcrypt=require('bcrypt');
-const jwt=require('jsonwebtoken');
-const auth = require('../middleware/auth');
+const router = express.Router();
+const userModel = require('../models/user.model');
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
 
-
-router.get('/register',auth,(req,res)=>{
-        res.render('register');
+// Register Page
+router.get('/register', (req, res) => {
+  res.render('register', { message: null });
 });
 
+// Register Logic
 router.post('/register',
-        body('email').trim().isEmail().isLength({min:10}),
-        body('password').trim().isLength({min:5}),
-        body('username').trim().isLength({min:4}),
-        (req,res)=>{
-        const errors=validationResult(req);
-        
-        if(!errors.isEmpty()){
-                return res.status(400).json({
-                        errors:errors.array(),
-                        message:'Invalid data'});
-        }
-        
-        const {username,email,password}=req.body;
+  body('email').trim().isEmail().isLength({ min: 10 }),
+  body('password').trim().isLength({ min: 5 }),
+  body('username').trim().isLength({ min: 4 }),
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).render('register', { message: 'Invalid form data' });
+    }
 
-        const hashPass=bcrypt.hashSync(password,10);
+    const { username, email, password } = req.body;
 
-        const newUser=new userModel({
-                username:username,
-                email:email,
-                password:hashPass
-        })
-        res.json(newUser);
+    try {
+      const userExists = await userModel.findOne({ $or: [{ email }, { username }] });
+
+      if (userExists) {
+        return res.status(400).render('register', { message: 'User already exists' });
+      }
+
+      const hashPass = bcrypt.hashSync(password, 10);
+      const newUser = new userModel({ username, email, password: hashPass });
+      await newUser.save();
+
+      res.redirect('/user/login');
+    } catch (err) {
+      console.error(err);
+      res.status(500).render('register', { message: 'Server error' });
+    }
+  }
+);
+
+// Login Page
+router.get('/login', (req, res) => {
+  res.render('login', { message: null });
 });
 
-router.get('/login',(req,res)=>{
-        res.render('login');
-});
-
+// Login Logic
 router.post('/login',
-        body('username').trim().isLength({min:4}),
-        body('password').trim().isLength({min:5}),
-        async (req,res)=>{
-                const errors=validationResult(req);
-        
-                if(!errors.isEmpty()){
-                        return res.status(400).json({
-                                errors:errors.array(),
-                                message:'Invalid data'});
-                }
-                const {username,password}=req.body;
+  body('username').trim().isLength({ min: 4 }),
+  body('password').trim().isLength({ min: 5 }),
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).render('login', { message: 'Invalid login credentials' });
+    }
 
-                const user = await userModel.findOne({username:username});
+    const { username, password } = req.body;
 
-                if(!user){
-                        return res.status(400).json({message:'username or password incorrect'});
-                }
+    try {
+      const user = await userModel.findOne({ username });
 
-                const match = await bcrypt.compare(password,user.password);
+      if (!user) {
+        return res.status(400).render('login', { message: 'Username or password incorrect' });
+      }
 
-                if(!match){
-                        return res.status(400).json({message:'username or password incorrect'});
-                }
+      const match = await bcrypt.compare(password, user.password);
+      if (!match) {
+        return res.status(400).render('login', { message: 'Username or password incorrect' });
+      }
 
-                const token=jwt.sign({
-                        userId:user._id,
-                        username:user.username,
-                        email:user.email
-                },process.env.JWT_SECRET);
+      const token = jwt.sign(
+        {
+          userId: user._id,
+          username: user.username,
+          email: user.email
+        },
+        process.env.JWT_SECRET,
+        { expiresIn: '1d' }
+      );
 
-                res.cookie('token',token)
-                res.send('Logged in');
+      res.cookie('token', token, {
+        httpOnly: true,
+        maxAge: 24 * 60 * 60 * 1000
+      });
+
+      res.redirect('/home');
+    } catch (err) {
+      console.error(err);
+      res.status(500).render('login', { message: 'Server error during login' });
+    }
+  }
+);
+
+// Logout
+router.get('/logout', (req, res) => {
+  res.clearCookie('token');
+  res.redirect('/user/login');
 });
 
-
-
-module.exports=router;
+module.exports = router;

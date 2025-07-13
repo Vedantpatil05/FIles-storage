@@ -1,27 +1,32 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
-const { storage } = require('../config/appwrite'); // Adjust the path to your appwrite config
+const { storage } = require('../config/appwrite');
+const auth = require('../middleware/auth'); // ✅ ADD THIS
 
 const upload = multer({ dest: 'uploads/' });
 
-router.get('/home', (req, res) => {
-    res.render('home');
+// 🔒 GET route to show the upload form
+router.get('/upload', auth, (req, res) => {
+    res.render('upload', { success: false });
 });
 
-router.post('/upload', upload.single('file'), async (req, res) => {
+// 🔒 POST route to upload file
+router.post('/upload', auth, upload.single('file'), async (req, res) => {
     try {
         const file = req.file;
+
         const result = await storage.createFile(
-            process.env.BUCKET_ID, 
-            file.originalname,   // Use the original file name
-            file.path             // The uploaded file path
+            process.env.BUCKET_ID,
+            file.originalname,
+            file.path
         );
 
-        res.status(200).json({ message: 'File uploaded successfully', fileId: result.$id });
+        // ✅ Render form again with success message
+        res.render('upload', { success: true });
     } catch (error) {
         console.error(error);
-        res.status(500).json({ error: 'Failed to upload file' });
+        res.status(500).render('upload', { success: false });
     }
 });
 

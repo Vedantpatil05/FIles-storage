@@ -1,39 +1,40 @@
+// 📁 app.js
 const express = require('express');
 const path = require('path');
+const cookieParser = require('cookie-parser');
+require('dotenv').config();
+const connectToDB = require('./config/db');
+connectToDB();
+
 const app = express();
 
-// EJS Setup
+app.use(express.urlencoded({ extended: true }));
+app.use(express.static('public'));
+app.use(cookieParser());
+
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
-// Middleware
-app.use(express.urlencoded({ extended: true }));
-app.use(express.static('public'));
+const userRoutes = require('./routes/user.routes');
+const uploadRoutes = require('./routes/upload.routes'); // ✅ Add upload routes
 
-// Routes
+app.use('/user', userRoutes);
+app.use(uploadRoutes); // ✅ Register upload route without prefix
 
-// Upload form page
+const auth = require('./middleware/auth');
+
 app.get('/', (req, res) => {
-  res.render('index', { success: false });
+  res.redirect('/user/login');
 });
 
-// Fake upload logic
-app.post('/upload', (req, res) => {
-  // Just show fake success message
-  res.render('index', { success: true });
-});
-
-// Dashboard page with fake file list
-app.get('/home', (req, res) => {
+app.get('/home', auth, (req, res) => {
   res.render('home');
 });
 
-// Fallback route
 app.use((req, res) => {
   res.status(404).send('Page Not Found');
 });
 
-// Server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`✅ Server running on http://localhost:${PORT}`);
